@@ -296,41 +296,85 @@ section.module { margin-bottom: 26px; }
 .chip.active { background: var(--brass); border-color: var(--brass); color: var(--ink); font-weight: 600; }
 .chip.disabled { opacity: 0.35; cursor: not-allowed; }
 
-/* ---- Fader bank ---------------------------------------------------------- */
+/* ---- Fader bank (mixing panel) — Midas-style channel strips -------------- */
 .fader-bank {
-  display: flex; justify-content: space-around; gap: 12px;
-  background: var(--groove); border-radius: 10px; padding: 22px 16px 16px; border: 1px solid var(--hairline); flex-wrap: wrap;
+  display: flex; justify-content: space-around; gap: 14px; flex-wrap: wrap;
+  background: linear-gradient(180deg, #202126 0%, #0f1013 10%, #060608 100%);
+  border-radius: 12px;
+  padding: 18px 16px 16px;
+  border: 1px solid #000;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), inset 0 0 46px rgba(0,0,0,0.7), 0 1px 0 rgba(255,255,255,0.04);
 }
-.fader { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 130px; }
-.fader-top-label { font-family: 'Space Mono', monospace; font-size: 10px; letter-spacing: 1px; text-align: center; color: var(--cream-dim); height: 28px; }
+.fader {
+  --accent: #38BDF8;
+  display: flex; flex-direction: column; align-items: center; gap: 10px; width: 134px;
+  background: linear-gradient(180deg, #191a1f, #0c0d10);
+  border: 1px solid #2a2b32; border-radius: 8px; padding: 12px 8px 11px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 2px 6px rgba(0,0,0,0.5);
+}
+/* Illuminated scribble-strip label */
+.scribble {
+  width: 100%; min-height: 32px;
+  display: flex; align-items: center; justify-content: center; text-align: center;
+  font-family: 'Space Mono', monospace; font-size: 10px; font-weight: 700; letter-spacing: 1px;
+  color: #0a0a0a; background: var(--accent); border-radius: 4px; padding: 5px 4px; line-height: 1.15;
+  box-shadow: 0 0 14px -3px var(--accent), inset 0 1px 0 rgba(255,255,255,0.45), inset 0 -1px 0 rgba(0,0,0,0.25);
+  text-shadow: 0 1px 0 rgba(255,255,255,0.25);
+}
+.fader-body { display: flex; align-items: stretch; gap: 9px; height: 196px; }
 .fader-track-wrap {
-  width: 44px; height: 190px; position: relative;
-  background: repeating-linear-gradient(to bottom, transparent, transparent 17px, var(--hairline) 17px, var(--hairline) 18px);
+  width: 40px; height: 196px; position: relative;
+  background: repeating-linear-gradient(to bottom, transparent, transparent 14px, rgba(255,255,255,0.055) 14px, rgba(255,255,255,0.055) 15px);
   border-radius: 4px;
 }
 .fader-track-wrap::before {
-  content: ''; position: absolute; left: 50%; top: 0; bottom: 0; width: 4px;
-  transform: translateX(-50%); background: #0D0C0B; border-radius: 3px;
+  content: ''; position: absolute; left: 50%; top: 6px; bottom: 6px; width: 6px;
+  transform: translateX(-50%);
+  background: linear-gradient(90deg, #000, #303036 50%, #000); border-radius: 4px;
+  box-shadow: inset 0 0 4px #000;
+}
+.fader-track-wrap::after { /* center detent */
+  content: ''; position: absolute; left: 3px; right: 3px; top: 50%; height: 1px;
+  background: rgba(255,255,255,0.28);
 }
 input[type=range].vslider {
-  position: absolute; width: 190px; height: 44px; top: 73px; left: -73px; transform: rotate(-90deg);
+  position: absolute; width: 196px; height: 40px; top: 78px; left: -78px; transform: rotate(-90deg);
   -webkit-appearance: none; appearance: none; background: transparent; margin: 0;
 }
 input[type=range].vslider::-webkit-slider-runnable-track { height: 6px; background: transparent; }
 input[type=range].vslider::-webkit-slider-thumb {
-  -webkit-appearance: none; width: 44px; height: 20px; border-radius: 3px;
-  background: linear-gradient(180deg, var(--brass-bright), var(--brass));
-  border: 1px solid #8C6A2E; box-shadow: 0 2px 4px rgba(0,0,0,0.4); cursor: grab; margin-top: -7px;
+  -webkit-appearance: none; width: 40px; height: 26px; border-radius: 4px;
+  background:
+    linear-gradient(var(--accent), var(--accent)) center/100% 3px no-repeat,
+    linear-gradient(180deg, #f6f7f9 0%, #d2d5db 44%, #969ca5 56%, #e8eaee 100%);
+  border: 1px solid #34373e; margin-top: -10px; cursor: grab;
+  box-shadow: 0 3px 7px rgba(0,0,0,0.6), 0 0 12px -3px var(--accent);
 }
 input[type=range].vslider::-moz-range-track { height: 6px; background: transparent; }
 input[type=range].vslider::-moz-range-thumb {
-  width: 44px; height: 20px; border-radius: 3px;
-  background: linear-gradient(180deg, var(--brass-bright), var(--brass)); border: 1px solid #8C6A2E; cursor: grab;
+  width: 40px; height: 26px; border-radius: 4px;
+  background:
+    linear-gradient(var(--accent), var(--accent)) center/100% 3px no-repeat,
+    linear-gradient(180deg, #f6f7f9 0%, #d2d5db 44%, #969ca5 56%, #e8eaee 100%);
+  border: 1px solid #34373e; cursor: grab;
+  box-shadow: 0 3px 7px rgba(0,0,0,0.6), 0 0 12px -3px var(--accent);
 }
-.fader-value { font-family: 'Space Mono', monospace; font-size: 11px; color: var(--brass-bright); }
+/* Segmented LED level meter */
+.led-meter { display: flex; flex-direction: column; gap: 2px; width: 12px; height: 196px; padding: 1px 0; }
+.seg { flex: 1; border-radius: 1px; background: #17181c; box-shadow: inset 0 0 2px #000; }
+.seg.g { --c: #46E08A; }
+.seg.a { --c: #FBBF24; }
+.seg.r { --c: #F5544B; }
+.seg.on { background: var(--c); box-shadow: 0 0 7px -1px var(--c), inset 0 0 2px rgba(255,255,255,0.55); }
+.fader-value {
+  font-family: 'Space Mono', monospace; font-size: 13px; font-weight: 700;
+  color: var(--accent); text-shadow: 0 0 9px var(--accent);
+  background: #050506; border: 1px solid #2a2b32; border-radius: 4px;
+  padding: 2px 0; width: 48px; text-align: center;
+}
 .fader-bottom-label {
-  font-family: 'Space Mono', monospace; font-size: 9.5px; letter-spacing: 0.5px; color: var(--cream-dim);
-  text-align: center; line-height: 1.4; min-height: 30px;
+  font-family: 'Space Mono', monospace; font-size: 9px; letter-spacing: 0.3px; color: #838893;
+  text-align: center; line-height: 1.35; min-height: 28px;
 }
 
 /* ---- Toggle groups ------------------------------------------------------- */

@@ -525,6 +525,7 @@ function applyAnalysis(a) {
 function animateFader(key, target) {
   const input = document.querySelector(`input.vslider[data-key="${key}"]`);
   if (!input) return;
+  const fader = input.closest(".fader");
   const start = Number(input.value);
   const t0 = performance.now();
   const dur = 550;
@@ -533,8 +534,9 @@ function animateFader(key, target) {
     const eased = 1 - Math.pow(1 - p, 3);
     const v = Math.round(start + (target - start) * eased);
     input.value = v;
-    const valEl = input.closest(".fader").querySelector(".fader-value");
+    const valEl = fader.querySelector(".fader-value");
     if (valEl) valEl.textContent = v;
+    updateMeter(fader, v);
     if (p < 1) requestAnimationFrame(step);
   }
   requestAnimationFrame(step);
@@ -575,6 +577,25 @@ function refreshIdentity() {
 
 // ---- Faders ----------------------------------------------------------------
 
+const FADER_ACCENTS = { tech: "#38BDF8", wit: "#F472B6", formality: "#FBBF24", pace: "#46E08A" };
+const METER_SEGS = 14;
+
+function buildMeter() {
+  const meter = el("div", { className: "led-meter" });
+  for (let i = 0; i < METER_SEGS; i++) {
+    const fromBottom = METER_SEGS - 1 - i; // DOM top→bottom, so invert
+    const cls = fromBottom >= METER_SEGS - 2 ? "r" : fromBottom >= METER_SEGS - 5 ? "a" : "g";
+    meter.appendChild(el("div", { className: `seg ${cls}` }));
+  }
+  return meter;
+}
+
+function updateMeter(fader, value) {
+  const segs = fader.querySelectorAll(".seg");
+  const lit = Math.round((value / 100) * segs.length);
+  segs.forEach((s, i) => s.classList.toggle("on", segs.length - 1 - i < lit));
+}
+
 function renderFaders() {
   const mod = el("section", { className: "module" });
   mod.innerHTML = `<div class="module-label">Ch.2 — Channel strips</div>
@@ -583,23 +604,36 @@ function renderFaders() {
   const st = activeStyle().state;
   state.config.FADERS.forEach((f) => {
     const wrap = el("div", { className: "fader" });
-    wrap.appendChild(el("div", { className: "fader-top-label", textContent: f.label.replace("\n", " ") }));
+    wrap.style.setProperty("--accent", FADER_ACCENTS[f.key] || "#38BDF8");
+
+    const scribble = el("div", { className: "scribble" });
+    scribble.innerHTML = f.label.replace("\n", "<br>");
+    wrap.appendChild(scribble);
+
+    const body = el("div", { className: "fader-body" });
     const trackWrap = el("div", { className: "fader-track-wrap" });
     const input = el("input", { type: "range", min: 0, max: 100, value: st[f.key], className: "vslider" });
     input.dataset.key = f.key;
+    trackWrap.appendChild(input);
+    body.appendChild(trackWrap);
+    body.appendChild(buildMeter());
+    wrap.appendChild(body);
+
     const valEl = el("div", { className: "fader-value", textContent: st[f.key] });
     input.addEventListener("input", () => {
       st[f.key] = Number(input.value);
       valEl.textContent = input.value;
+      updateMeter(wrap, Number(input.value));
       scheduleSave();
     });
-    trackWrap.appendChild(input);
-    wrap.appendChild(trackWrap);
     wrap.appendChild(valEl);
+
     const bottom = el("div", { className: "fader-bottom-label" });
     bottom.innerHTML = f.low.replace("\n", "<br>") + " &nbsp;—&nbsp; " + f.high.replace("\n", "<br>");
     wrap.appendChild(bottom);
+
     bank.appendChild(wrap);
+    updateMeter(wrap, st[f.key]);
   });
   mod.appendChild(bank);
   return mod;
