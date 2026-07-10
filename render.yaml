@@ -4,7 +4,9 @@ services:
   - type: web
     name: voice-tuner
     runtime: node
-    plan: free
+    # Starter (paid) is required for a persistent disk — the free plan's
+    # filesystem is wiped on every deploy/restart.
+    plan: starter
     buildCommand: npm install
     startCommand: npm start
     envVars:
@@ -17,6 +19,10 @@ services:
       # Mark cookies Secure (served over HTTPS on Render).
       - key: SECURE_COOKIES
         value: "1"
+      # Store accounts, styles and shares on the persistent disk (see `disk:`
+      # below) so they survive deploys and restarts.
+      - key: DATA_DIR
+        value: /var/data
       # Add your Anthropic key in the dashboard to enable live Claude analysis.
       # Without it, the app runs in offline demo mode.
       - key: ANTHROPIC_API_KEY
@@ -37,13 +43,9 @@ services:
       # - key: RESET_EMAIL_FROM
       #   value: Voice Tuner <noreply@gonemo.ai>
 
-    # NOTE — free plan caveats:
-    #   • The service sleeps after ~15 min idle (first request then takes ~30s).
-    #   • Disk is EPHEMERAL: accounts and saved styles reset on each deploy/restart.
-    # For durable storage, attach a persistent disk (paid plan) and point
-    # DATA_DIR at it — uncomment below:
-    # disk:
-    #   name: voice-tuner-data
-    #   mountPath: /var/data
-    #   sizeGB: 1
-    # (then add an env var DATA_DIR=/var/data)
+    # Persistent disk — durable storage for accounts, styles and shares.
+    # DATA_DIR (above) points at this mount, so data survives deploys/restarts.
+    disk:
+      name: voice-tuner-data
+      mountPath: /var/data
+      sizeGB: 1

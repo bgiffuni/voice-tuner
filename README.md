@@ -126,9 +126,11 @@ data/                   Runtime state (gitignored): users.json + per-user styles
 This repo includes a `render.yaml` Blueprint. On [render.com](https://render.com):
 **New → Blueprint**, pick this repo, and Render creates the web service.
 `SESSION_SECRET` is generated and pinned, `SECURE_COOKIES=1` is preset; add
-`ANTHROPIC_API_KEY` in the dashboard to enable live Claude. Free-plan disk is
-**ephemeral** (accounts reset on redeploy) — attach a persistent disk and set
-`DATA_DIR` for durable storage (see the commented block in `render.yaml`).
+`ANTHROPIC_API_KEY` in the dashboard to enable live Claude. The Blueprint runs
+on the **Starter** plan with a **persistent disk** mounted at `/var/data`
+(`DATA_DIR` points at it), so accounts, styles and shares survive deploys and
+restarts. A persistent disk requires a paid instance — Render's free plan has
+an ephemeral filesystem that resets on every deploy.
 
 ### Notes
 
