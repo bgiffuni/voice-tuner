@@ -2,7 +2,8 @@ import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { env } from "./env.ts";
-import { configPayload, ADJECTIVE_SET, MUTE_KEYS, SOLO_KEYS, ROUTES } from "./config.ts";
+import { configPayload } from "./config.ts";
+import { sanitizeAnalysis } from "./demo.ts";
 import {
   signup, login, startSession, endSession, currentUser, requireAuth, publicUser,
   requestPasswordReset, completePasswordReset,
@@ -14,11 +15,9 @@ import {
 import { ingestSample, type RawSample } from "./ingest.ts";
 import { analyzeSamples, currentMode } from "./provider.ts";
 import type { ConsoleState, User, Source } from "./types.ts";
-import { DEFAULT_STATE } from "./types.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.resolve(__dirname, "..", "public");
-const ROUTE_SET = new Set(ROUTES);
 
 const app = express();
 app.use(express.json({ limit: "12mb" })); // room for base64-encoded pdf/docx uploads
@@ -31,22 +30,10 @@ function userOf(req: express.Request): User {
 
 /** Coerce untrusted input into a valid ConsoleState (drops unknown keys). */
 function sanitizeState(input: unknown): ConsoleState {
-  const o = (input ?? {}) as Record<string, unknown>;
-  const num = (v: unknown, d: number) => {
-    const n = Number(v);
-    return Number.isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : d;
-  };
-  const strArr = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
-  return {
-    adjectives: strArr(o.adjectives).filter((a) => ADJECTIVE_SET.has(a)).slice(0, 3),
-    tech: num(o.tech, DEFAULT_STATE.tech),
-    wit: num(o.wit, DEFAULT_STATE.wit),
-    formality: num(o.formality, DEFAULT_STATE.formality),
-    pace: num(o.pace, DEFAULT_STATE.pace),
-    mutes: [...new Set(strArr(o.mutes).filter((m) => MUTE_KEYS.has(m)))],
-    solos: [...new Set(strArr(o.solos).filter((s) => SOLO_KEYS.has(s)))],
-    routes: [...new Set(strArr(o.routes).filter((r) => ROUTE_SET.has(r)))],
-  };
+  // sanitizeAnalysis does all the per-field coercion (enums, caps, trims); the
+  // console state is just that result without the analysis-only `summary`.
+  const a = sanitizeAnalysis((input ?? {}) as Record<string, unknown>);
+  return { persona: a.persona, dimensions: a.dimensions, matrix: a.matrix, vocab: a.vocab };
 }
 
 function shareUrl(req: express.Request, shareId: string): string {

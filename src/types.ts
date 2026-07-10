@@ -1,23 +1,52 @@
 // Shared types across the backend (and mirrored loosely on the client).
+//
+// The console models a Brand Tone of Voice Guide with four modules:
+//   1. Brand Persona          — who we are, mission, core values
+//   2. The 4 Dimensions       — humour, formality, respectfulness, enthusiasm
+//   3. Tone of Voice Matrix   — per-trait We Are / We Are NOT / Do / Don't
+//   4. Vocabulary & style     — words we love/avoid + grammar rules
 
-/** The four console faders, each 0–100. */
-export interface Faders {
-  tech: number;
-  wit: number;
-  formality: number;
-  pace: number;
+/** Master section: who the brand is and what it's for. */
+export interface PersonaState {
+  archetype: string; // e.g. "Trusted Guide", "Energetic Coach"
+  audience: string; // e.g. "early-stage founders"
+  mission: string; // "We help <audience> <benefit> by <how>."
+  values: string[]; // up to 3 core values (free text)
 }
 
-/** The full state of the mixing console for one style. */
+/** The four tone dimensions, each a named setting from config DIMENSIONS. */
+export interface DimensionsState {
+  humor: string;
+  formality: string;
+  respectfulness: string;
+  enthusiasm: string;
+}
+
+/** One row of the Tone of Voice Matrix. */
+export interface MatrixRow {
+  trait: string; // "Confident"
+  weAre: string; // "Clear and direct."
+  weAreNot: string; // "Arrogant or dismissive."
+  doEx: string; // "We can help you scale."
+  dontEx: string; // "We are the only ones who matter."
+}
+
+/** Vocabulary & style rules. */
+export interface VocabState {
+  love: string[]; // words we love
+  avoid: string[]; // words we avoid
+  contractions: string; // one of GRAMMAR.contractions
+  emojis: string; // one of GRAMMAR.emojis
+  exclamations: string; // one of GRAMMAR.exclamations
+  casing: string; // one of GRAMMAR.casing
+}
+
+/** The full state of the console for one brand voice. */
 export interface ConsoleState {
-  adjectives: string[]; // up to 3 identity words
-  tech: number;
-  wit: number;
-  formality: number;
-  pace: number;
-  mutes: string[]; // keys into config MUTES
-  solos: string[]; // keys into config SOLOS
-  routes: string[]; // route labels
+  persona: PersonaState;
+  dimensions: DimensionsState;
+  matrix: MatrixRow[]; // up to 3 rows
+  vocab: VocabState;
 }
 
 /** A writing sample the user fed in to calibrate the console. */
@@ -30,7 +59,7 @@ export interface Source {
   addedAt: number;
 }
 
-/** A named writing style (e.g. "Professional", "Personal"). */
+/** A named brand voice (e.g. "Marketing", "Support"). */
 export interface Style {
   id: string;
   userId: string;
@@ -52,23 +81,28 @@ export interface User {
 
 /** What the analyzer returns from a set of writing samples. */
 export interface AnalysisResult {
-  adjectives: string[];
-  tech: number;
-  wit: number;
-  formality: number;
-  pace: number;
-  mutes: string[];
-  solos: string[];
+  persona: PersonaState;
+  dimensions: DimensionsState;
+  matrix: MatrixRow[];
+  vocab: VocabState;
   summary: string; // one or two sentences describing the voice
 }
 
 export const DEFAULT_STATE: ConsoleState = {
-  adjectives: [],
-  tech: 50,
-  wit: 50,
-  formality: 50,
-  pace: 50,
-  mutes: [],
-  solos: [],
-  routes: [],
+  persona: { archetype: "", audience: "", mission: "", values: [] },
+  dimensions: {
+    humor: "Neutral",
+    formality: "Professional",
+    respectfulness: "Polite",
+    enthusiasm: "Matter-of-fact",
+  },
+  matrix: [],
+  vocab: {
+    love: [],
+    avoid: [],
+    contractions: "Allowed",
+    emojis: "Sparingly",
+    exclamations: "Avoid",
+    casing: "Standard",
+  },
 };

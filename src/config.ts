@@ -1,63 +1,95 @@
 // The console's vocabulary lives here (not hardcoded in the UI), so it can be
 // edited in one place and is served to the client via GET /api/config. The
 // analyzer and demo generator also reference these keys.
+//
+// The console models a Brand Tone of Voice Guide:
+//   1. Persona  2. The 4 Dimensions  3. Tone Matrix  4. Vocabulary & style.
 
-export const ADJECTIVES = [
-  "Friendly", "Analytical", "Bold", "Playful", "Precise", "Empathetic",
-  "Direct", "Curious", "Confident", "Pragmatic", "Storyteller", "Calm",
-  "Energetic", "Meticulous", "Irreverent", "Grounded",
-];
+// ---- 2. The 4 Dimensions of Tone ------------------------------------------
+// Each dimension is a stepped fader: options are ordered low → high, i.e.
+// options[0] sits at the bottom of the fader, options[last] at the top.
 
-export interface FaderDef {
-  key: "tech" | "wit" | "formality" | "pace";
-  label: string; // short console label (may contain \n)
-  low: string;
-  high: string;
+export interface DimensionDef {
+  key: "humor" | "formality" | "respectfulness" | "enthusiasm";
+  label: string; // short scribble-strip label
+  options: string[]; // ordered low → high
+  lowHint: string; // caption for the bottom of the fader
+  highHint: string; // caption for the top of the fader
 }
 
-export const FADERS: FaderDef[] = [
-  { key: "tech", label: "TECH\nDEPTH", low: "Plain\nlanguage", high: "Full\ndepth" },
-  { key: "wit", label: "WIT", low: "Straight-\nforward", high: "Playful\n& bold" },
-  { key: "formality", label: "FORMAL-\nITY", low: "Casual", high: "Formal &\npolished" },
-  { key: "pace", label: "PACE", low: "Detailed &\nthorough", high: "Tight &\nconcise" },
+export const DIMENSIONS: DimensionDef[] = [
+  {
+    key: "humor",
+    label: "HUMOR",
+    options: ["Serious", "Dry", "Neutral", "Playful", "Funny"],
+    lowHint: "Serious",
+    highHint: "Funny",
+  },
+  {
+    key: "formality",
+    label: "FORMAL-\nITY",
+    options: ["Colloquial", "Casual", "Professional", "Formal"],
+    lowHint: "Colloquial",
+    highHint: "Formal",
+  },
+  {
+    key: "respectfulness",
+    label: "RESPECT",
+    options: ["Irreverent", "Neutral", "Polite", "Respectful"],
+    lowHint: "Irreverent",
+    highHint: "Respectful",
+  },
+  {
+    key: "enthusiasm",
+    label: "ENERGY",
+    options: ["Low-key", "Matter-of-fact", "Enthusiastic", "High"],
+    lowHint: "Low-key",
+    highHint: "High",
+  },
 ];
 
-export interface ToggleDef {
-  key: string;
-  label: string;
-  text: string;
-}
+// ---- 4. Vocabulary & Style Rules — grammar switches -----------------------
 
-export const MUTES: ToggleDef[] = [
-  { key: "jargon", label: "Jargon without translation", text: "Technical terms dropped in without a plain-language translation or a reason to be there." },
-  { key: "padding", label: "Padding & filler", text: "Content that pads length without adding anything the reader actually needed." },
-  { key: "formulaic", label: "Formulaic structure", text: "The same opening and closing move on every piece — structure should be earned, not templated." },
-  { key: "emdash", label: "Excessive em-dashes", text: "Em-dashes used as a tic rather than for a genuine interruption or aside." },
-  { key: "hedging", label: "Hedging language", text: "Hedge words like \"I think\" or \"maybe\" standing in where a direct claim would do." },
-  { key: "hype", label: "Exclamation-point energy", text: "Exclamation points and forced enthusiasm standing in for real warmth." },
-  { key: "passive", label: "Passive voice", text: "Passive constructions that obscure who's actually doing what." },
-  { key: "cliche", label: "Clichés & buzzwords", text: "Recycled industry buzzwords doing the work a real sentence should do." },
+export const GRAMMAR = {
+  contractions: ["Allowed", "Forbidden"],
+  emojis: ["Never", "Sparingly", "Often"],
+  exclamations: ["Avoid", "Allowed"],
+  casing: ["Standard", "Flexible"],
+} as const;
+
+// ---- Suggestion pools (free text is allowed; these are just chips) ---------
+
+/** Suggested archetypes for the persona (free text still allowed). */
+export const ARCHETYPES = [
+  "Trusted Guide", "Energetic Coach", "Innovative Rebel", "Steady Expert",
+  "Friendly Insider", "Bold Challenger", "Calm Reassurer", "Witty Companion",
 ];
 
-export const SOLOS: ToggleDef[] = [
-  { key: "clarity", label: "Clarity & concision", text: "Being clear and concise, even when the underlying idea is genuinely complex." },
-  { key: "warmth", label: "Warmth & approachability", text: "Being read as warm and approachable — this matters more than sounding impressive." },
-  { key: "versatility", label: "Technical versatility", text: "Dialing technical depth up or down depending on who's actually reading." },
-  { key: "experience", label: "Storytelling from experience", text: "Speaking from real, lived experience rather than general theory." },
-  { key: "voice", label: "Distinct personal voice", text: "Sounding recognizably like one specific person, not generic, interchangeable writing." },
-  { key: "humor", label: "Humor & wit", text: "Being genuinely sharp or funny when the moment allows it." },
-  { key: "authority", label: "Confidence & authority", text: "Sounding sure of the claims being made, without hedging." },
+/** Suggested core values (free text still allowed). */
+export const VALUE_POOL = [
+  "Clarity", "Honesty", "Craft", "Curiosity", "Empathy", "Boldness",
+  "Reliability", "Simplicity", "Momentum", "Rigor",
 ];
 
-export const ROUTES = [
-  "Marketing content", "Client communications", "Business proposals",
-  "Social media", "Internal docs & reports",
+/** Suggested traits for the Tone Matrix rows (free text still allowed). */
+export const TRAIT_POOL = [
+  "Confident", "Helpful", "Witty", "Direct", "Warm", "Precise",
+  "Playful", "Grounded", "Empathetic", "Bold",
 ];
 
-export const MUTE_KEYS = new Set(MUTES.map((m) => m.key));
-export const SOLO_KEYS = new Set(SOLOS.map((s) => s.key));
-export const ADJECTIVE_SET = new Set(ADJECTIVES);
+// ---- Lookups used for validation ------------------------------------------
+
+export const DIMENSION_OPTIONS: Record<string, Set<string>> = Object.fromEntries(
+  DIMENSIONS.map((d) => [d.key, new Set(d.options)]),
+);
+
+export const GRAMMAR_SETS = {
+  contractions: new Set<string>(GRAMMAR.contractions),
+  emojis: new Set<string>(GRAMMAR.emojis),
+  exclamations: new Set<string>(GRAMMAR.exclamations),
+  casing: new Set<string>(GRAMMAR.casing),
+};
 
 export function configPayload() {
-  return { ADJECTIVES, FADERS, MUTES, SOLOS, ROUTES };
+  return { DIMENSIONS, GRAMMAR, ARCHETYPES, VALUE_POOL, TRAIT_POOL };
 }
