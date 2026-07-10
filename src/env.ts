@@ -35,6 +35,14 @@ export const env = {
   sessionSecret: process.env.SESSION_SECRET?.trim() || "",
   secureCookies: process.env.SECURE_COOKIES === "1",
   dataDir: process.env.DATA_DIR?.trim() || "./data",
+  // Password-reset email delivery (pick one; else links are logged to console)
+  smtpHost: process.env.SMTP_HOST?.trim() || "",
+  smtpPort: Number(process.env.SMTP_PORT) || 465,
+  smtpUser: process.env.SMTP_USER?.trim() || "",
+  smtpPass: process.env.SMTP_PASS || "",
+  resendKey: process.env.RESEND_API_KEY?.trim() || "",
+  resetEmailFrom: process.env.RESET_EMAIL_FROM?.trim() || "Voice Tuner <noreply@gonemo.ai>",
+  appUrl: process.env.APP_URL?.trim() || "",
 };
 
 /** Which backend will actually run: forced by PROVIDER, else live iff a key exists. */

@@ -14,19 +14,23 @@ demo mode so it runs with no key.
 
 ## What it does
 
-- **Auto-tune from your writing.** Paste text, upload text files (`.txt`, `.md`,
-  `.html`), or add URLs of things you've written. The analyzer reads them and
-  sets the four faders, picks identity words, and suggests mutes/solos. With an
-  API key this is Claude; without one, a local heuristic does a best-effort pass.
+- **Auto-tune from your writing.** Paste text, upload documents (`.pdf`, `.docx`,
+  `.txt`, `.md`, `.html`), or add URLs of things you've written. The analyzer
+  reads them and sets the four faders, picks identity words, and suggests
+  mutes/solos. With an API key this is Claude; without one, a local heuristic
+  does a best-effort pass.
 - **The mixing console.** Four faders (Technical Depth · Wit · Formality · Pace),
   *Mute* toggles (things the voice never does), *Solo* toggles (what it's known
   for), and *Routing* chips (where it's used).
 - **Multiple styles per account.** Keep a "Professional" and a "Personal" voice
   side by side — each saved independently, auto-saved as you tune.
-- **Voice Card.** Generate a warm, printed-looking card summarizing the voice;
-  copy it as text or download it as Markdown to hand to an AI writing agent.
+- **Voice Card _or_ Style Guide.** Toggle between a compact printed-looking card
+  and a fuller written style guide (Core identity · Who you're writing for ·
+  Non-negotiables · What you're known for · Where this shows up · Structural
+  patterns). Copy either as text or download as Markdown to hand to an AI agent.
 - **Shareable links.** Turn on sharing for a style to get a public, read-only
-  `/s/…` link — no account needed to view it.
+  `/s/…` link — no account needed to view it (with the same card/guide toggle).
+- **Password reset.** "Forgot password?" emails a single-use, 1-hour reset link.
 
 ---
 
@@ -62,9 +66,11 @@ A pill in the top bar shows which backend is active (**Live · Claude** or **Dem
 public/                 Single-page front end (vanilla HTML/CSS/JS, no build step)
 src/
   server.ts             Express server + REST API (auth-gated)
-  auth.ts               Accounts (email+password), scrypt hashing, signed sessions
-  store.ts              File-backed users + styles (data/)
-  ingest.ts             Turn samples (paste/upload/URL) into analyzable text
+  auth.ts               Accounts (email+password), scrypt hashing, signed sessions,
+                        password-reset tokens
+  email.ts              Reset-email delivery (SMTP / Resend / console fallback)
+  store.ts              File-backed users + styles + reset tokens (data/)
+  ingest.ts             Turn samples (paste/upload/URL, incl. pdf & docx) into text
   provider.ts           Pick the analysis backend (live Claude vs offline)
   anthropic.ts          Live Claude analysis (forced tool call → structured JSON)
   demo.ts               Offline heuristic analyzer (no key needed)
@@ -83,6 +89,8 @@ data/                   Runtime state (gitignored): users.json + per-user styles
 | `POST /api/auth/login` | Sign in |
 | `POST /api/auth/logout` | Sign out |
 | `GET  /api/auth/me` | Current user, or 401 |
+| `POST /api/auth/forgot` | Email a reset link. Body: `{ email }`. Always `{ ok: true }` |
+| `POST /api/auth/reset` | Set a new password + sign in. Body: `{ token, password }` |
 
 **Styles** (require a session)
 
@@ -109,11 +117,25 @@ data/                   Runtime state (gitignored): users.json + per-user styles
 | `SESSION_SECRET` | generated | Stable cookie-signing secret for production |
 | `SECURE_COOKIES` | — | Set `1` behind HTTPS |
 | `DATA_DIR` | `./data` | Where users + styles are stored |
+| `SMTP_*` / `RESEND_API_KEY` | — | Reset-email backend (else links are logged) |
+| `RESET_EMAIL_FROM` | Gonemo sender | Visible sender for reset emails |
+| `APP_URL` | derived | Base URL for reset links (behind a proxy) |
+
+### Deploy (Render)
+
+This repo includes a `render.yaml` Blueprint. On [render.com](https://render.com):
+**New → Blueprint**, pick this repo, and Render creates the web service.
+`SESSION_SECRET` is generated and pinned, `SECURE_COOKIES=1` is preset; add
+`ANTHROPIC_API_KEY` in the dashboard to enable live Claude. Free-plan disk is
+**ephemeral** (accounts reset on redeploy) — attach a persistent disk and set
+`DATA_DIR` for durable storage (see the commented block in `render.yaml`).
 
 ### Notes
 
 - **Live analysis** uses a forced `report_voice` tool call so responses are
   always structured; on any failure it falls back to the offline heuristic.
-- **Uploaded files** are read as text in the browser; PDF/DOCX aren't parsed yet
-  (paste the text or use a URL for those).
-- All dynamic content in the Voice Card is HTML-escaped.
+- **Uploaded files:** `.pdf` and `.docx` are parsed server-side (pdf-parse +
+  mammoth); text files are read in the browser. Legacy `.doc` isn't supported —
+  save as `.docx` or paste the text.
+- **Reset tokens** are stored only as SHA-256 hashes, single-use, 1-hour expiry.
+- All dynamic content in the Voice Card / Style Guide is HTML-escaped.

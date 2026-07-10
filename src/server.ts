@@ -5,7 +5,9 @@ import { env } from "./env.ts";
 import { configPayload, ADJECTIVE_SET, MUTE_KEYS, SOLO_KEYS, ROUTES } from "./config.ts";
 import {
   signup, login, startSession, endSession, currentUser, requireAuth, publicUser,
+  requestPasswordReset, completePasswordReset,
 } from "./auth.ts";
+import { sendResetEmail } from "./email.ts";
 import {
   listStyles, getStyle, createStyle, updateStyle, deleteStyle, setShare, getStyleByShareId,
 } from "./store.ts";
@@ -19,7 +21,7 @@ const PUBLIC_DIR = path.resolve(__dirname, "..", "public");
 const ROUTE_SET = new Set(ROUTES);
 
 const app = express();
-app.use(express.json({ limit: "3mb" }));
+app.use(express.json({ limit: "12mb" })); // room for base64-encoded pdf/docx uploads
 
 // ---- Helpers --------------------------------------------------------------
 
@@ -91,6 +93,29 @@ app.post("/api/auth/logout", (_req, res) => {
 app.get("/api/auth/me", (req, res) => {
   const user = currentUser(req);
   if (!user) return res.status(401).json({ error: "Not signed in." });
+  res.json({ user: publicUser(user) });
+});
+
+// Request a reset link. Always returns { ok: true } — never reveals whether the
+// email is registered.
+app.post("/api/auth/forgot", async (req, res) => {
+  const email = typeof req.body?.email === "string" ? req.body.email : "";
+  const { rawToken, user } = requestPasswordReset(email);
+  if (rawToken && user) {
+    const base = env.appUrl || `${(req.headers["x-forwarded-proto"] as string)?.split(",")[0] || req.protocol}://${req.headers.host}`;
+    await sendResetEmail(user.email, `${base}/reset/${rawToken}`);
+  }
+  res.json({ ok: true });
+});
+
+app.post("/api/auth/reset", (req, res) => {
+  const { token, password } = req.body ?? {};
+  if (typeof token !== "string" || typeof password !== "string") {
+    return res.status(400).json({ error: "Token and password are required." });
+  }
+  const { user, error } = completePasswordReset(token, password);
+  if (error || !user) return res.status(400).json({ error });
+  startSession(res, user);
   res.json({ user: publicUser(user) });
 });
 

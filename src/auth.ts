@@ -5,7 +5,10 @@ import fs from "node:fs";
 import path from "node:path";
 import type { Request, Response, NextFunction } from "express";
 import { env } from "./env.ts";
-import { createUser, getUserByEmail, getUserById } from "./store.ts";
+import {
+  createUser, getUserByEmail, getUserById, updateUserPassword,
+  createResetToken, consumeResetToken,
+} from "./store.ts";
 import type { User } from "./types.ts";
 
 const COOKIE = "vt_session";
@@ -123,6 +126,30 @@ export function login(email: string, password: string): { user?: User; error?: s
   if (!user || !verifyPassword(password, user.passwordHash, user.salt)) {
     return { error: "Incorrect email or password." };
   }
+  return { user };
+}
+
+/**
+ * Begin a password reset. Returns a raw token + user only if the email maps to
+ * a real account; the caller emails the link. Callers must NOT reveal to the
+ * client whether an account existed.
+ */
+export function requestPasswordReset(email: string): { rawToken?: string; user?: User } {
+  const user = getUserByEmail(email);
+  if (!user) return {};
+  return { rawToken: createResetToken(user.id), user };
+}
+
+export function completePasswordReset(rawToken: string, newPassword: string): { user?: User; error?: string } {
+  if (typeof newPassword !== "string" || newPassword.length < 8) {
+    return { error: "Password must be at least 8 characters." };
+  }
+  const userId = consumeResetToken(rawToken);
+  if (!userId) return { error: "This reset link is invalid or has expired." };
+  const user = getUserById(userId);
+  if (!user) return { error: "This reset link is invalid or has expired." };
+  const { hash, salt } = hashPassword(newPassword);
+  updateUserPassword(userId, hash, salt);
   return { user };
 }
 

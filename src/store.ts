@@ -66,6 +66,53 @@ export function createUser(email: string, passwordHash: string, salt: string): U
   return user;
 }
 
+export function updateUserPassword(userId: string, passwordHash: string, salt: string): boolean {
+  const user = getUserById(userId);
+  if (!user) return false;
+  user.passwordHash = passwordHash;
+  user.salt = salt;
+  saveUsers();
+  return true;
+}
+
+// ---- Password-reset tokens ------------------------------------------------
+// Only the SHA-256 hash of each token is stored, never the raw token.
+
+const RESET_FILE = path.join(DATA_DIR, "reset-tokens.json");
+type ResetRecord = { userId: string; expires: number };
+let resetTokens: Record<string, ResetRecord> = readJson<Record<string, ResetRecord>>(RESET_FILE, {});
+
+function saveResetTokens(): void {
+  writeJson(RESET_FILE, resetTokens);
+}
+
+function hashToken(raw: string): string {
+  return crypto.createHash("sha256").update(raw).digest("hex");
+}
+
+/** Create a single-use reset token (valid 1 hour). Returns the raw token. */
+export function createResetToken(userId: string): string {
+  const raw = crypto.randomBytes(24).toString("base64url");
+  // Drop any existing tokens for this user, then add the new one.
+  for (const [h, rec] of Object.entries(resetTokens)) {
+    if (rec.userId === userId) delete resetTokens[h];
+  }
+  resetTokens[hashToken(raw)] = { userId, expires: Date.now() + 60 * 60 * 1000 };
+  saveResetTokens();
+  return raw;
+}
+
+/** Validate + consume a reset token. Returns the userId, or null. */
+export function consumeResetToken(raw: string): string | null {
+  const h = hashToken(raw);
+  const rec = resetTokens[h];
+  if (!rec) return null;
+  delete resetTokens[h];
+  saveResetTokens();
+  if (rec.expires < Date.now()) return null;
+  return rec.userId;
+}
+
 // ---- Shares index ---------------------------------------------------------
 
 type ShareIndex = Record<string, { userId: string; styleId: string }>;

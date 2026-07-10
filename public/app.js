@@ -79,6 +79,10 @@ const activeStyle = () => state.styles.find((s) => s.id === state.activeId);
     appEl().innerHTML = "<div class='wrap'>Couldn't reach the server.</div>";
     return;
   }
+
+  const resetMatch = location.pathname.match(/^\/reset\/([^/]+)$/);
+  if (resetMatch) return renderReset(decodeURIComponent(resetMatch[1]));
+
   try {
     const me = await api("GET", "/api/auth/me");
     state.user = me.user;
@@ -92,10 +96,11 @@ const activeStyle = () => state.styles.find((s) => s.id === state.activeId);
 // ---- Auth screen -----------------------------------------------------------
 
 function renderAuth() {
-  let tab = "login";
+  let tab = "login"; // login | signup | forgot
   const root = el("div", { className: "auth-screen" });
 
   function draw() {
+    if (tab === "forgot") return drawForgot();
     root.innerHTML = `
       <div class="auth-card">
         <div class="auth-brand"><span class="power-led"></span><h1>Voice Tuner</h1></div>
@@ -110,11 +115,43 @@ function renderAuth() {
           <div class="auth-error" id="authError"></div>
           <button class="btn-primary" type="submit">${tab === "signup" ? "Create account" : "Sign in"}</button>
         </form>
+        ${tab === "login" ? '<div class="auth-hint"><a href="#" id="forgotLink">Forgot password?</a></div>' : ""}
         <div class="auth-hint">A Gonemo project · <a href="https://www.gonemo.ai" target="_blank" rel="noopener">gonemo.ai</a></div>
       </div>`;
     root.querySelectorAll(".auth-tab").forEach((t) =>
       t.addEventListener("click", () => { tab = t.dataset.tab; draw(); }));
     root.querySelector("#authForm").addEventListener("submit", onSubmit);
+    const forgot = root.querySelector("#forgotLink");
+    if (forgot) forgot.addEventListener("click", (e) => { e.preventDefault(); tab = "forgot"; draw(); });
+  }
+
+  function drawForgot() {
+    root.innerHTML = `
+      <div class="auth-card">
+        <div class="auth-brand"><span class="power-led"></span><h1>Voice Tuner</h1></div>
+        <div class="auth-sub">Reset your password</div>
+        <form id="forgotForm">
+          <div class="field"><label>Email</label><input type="email" id="email" autocomplete="username" required></div>
+          <div class="auth-error" id="authError"></div>
+          <button class="btn-primary" type="submit">Email me a reset link</button>
+        </form>
+        <div class="auth-hint"><a href="#" id="backLink">← Back to sign in</a></div>
+      </div>`;
+    root.querySelector("#backLink").addEventListener("click", (e) => { e.preventDefault(); tab = "login"; draw(); });
+    root.querySelector("#forgotForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const email = root.querySelector("#email").value.trim();
+      const btn = root.querySelector("button[type=submit]");
+      btn.disabled = true;
+      try {
+        await api("POST", "/api/auth/forgot", { email });
+      } catch { /* ignore — response is intentionally uniform */ }
+      root.querySelector(".auth-card").innerHTML = `
+        <div class="auth-brand"><span class="power-led"></span><h1>Voice Tuner</h1></div>
+        <div class="auth-sub">Check your email</div>
+        <p style="font-size:13.5px;color:var(--cream-dim);line-height:1.6">If an account exists for <strong>${escapeHtml(email)}</strong>, a reset link is on its way. It expires in 1 hour.</p>
+        <div class="auth-hint"><a href="/">← Back to sign in</a></div>`;
+    });
   }
 
   async function onSubmit(e) {
@@ -139,6 +176,42 @@ function renderAuth() {
   appEl().innerHTML = "";
   appEl().appendChild(root);
   draw();
+}
+
+// Reset-password view (visited via the emailed /reset/:token link).
+function renderReset(token) {
+  const root = el("div", { className: "auth-screen" });
+  appEl().innerHTML = "";
+  appEl().appendChild(root);
+  root.innerHTML = `
+    <div class="auth-card">
+      <div class="auth-brand"><span class="power-led"></span><h1>Voice Tuner</h1></div>
+      <div class="auth-sub">Choose a new password</div>
+      <form id="resetForm">
+        <div class="field"><label>New password</label><input type="password" id="password" autocomplete="new-password" required></div>
+        <div class="auth-error" id="authError"></div>
+        <button class="btn-primary" type="submit">Set password & sign in</button>
+      </form>
+      <div class="auth-hint"><a href="/">← Back to sign in</a></div>
+    </div>`;
+  root.querySelector("#resetForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const password = root.querySelector("#password").value;
+    const errEl = root.querySelector("#authError");
+    const btn = root.querySelector("button[type=submit]");
+    errEl.textContent = "";
+    btn.disabled = true;
+    try {
+      const data = await api("POST", "/api/auth/reset", { token, password });
+      state.user = data.user;
+      history.replaceState(null, "", "/"); // drop the token from the URL
+      await loadStyles();
+      renderApp();
+    } catch (err) {
+      errEl.textContent = err.message;
+      btn.disabled = false;
+    }
+  });
 }
 
 // ---- Load / ensure styles --------------------------------------------------
@@ -342,8 +415,8 @@ function renderIngest() {
       row.appendChild(inp); row.appendChild(add);
       inputArea.appendChild(row);
     } else {
-      const drop = el("div", { className: "filedrop", textContent: "Click to choose text files (.txt, .md, .html), or drop them here" });
-      const file = el("input", { type: "file", accept: ".txt,.md,.markdown,.html,.htm,text/*", multiple: true, style: "display:none" });
+      const drop = el("div", { className: "filedrop", textContent: "Click to choose files (.pdf, .docx, .txt, .md, .html), or drop them here" });
+      const file = el("input", { type: "file", accept: ".pdf,.docx,.txt,.md,.markdown,.html,.htm,text/*", multiple: true, style: "display:none" });
       drop.addEventListener("click", () => file.click());
       file.addEventListener("change", () => handleFiles(file.files));
       drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("drag"); });
@@ -356,15 +429,27 @@ function renderIngest() {
 
   function handleFiles(files) {
     Array.from(files).forEach((f) => {
-      if (f.size > 2_000_000) return toast(`${f.name} is too large (max 2 MB).`, true);
+      if (f.size > 8_000_000) return toast(`${f.name} is too large (max 8 MB).`, true);
+      const ext = (f.name.split(".").pop() || "").toLowerCase();
       const reader = new FileReader();
-      reader.onload = () => {
-        const content = String(reader.result || "").trim();
-        if (content.length < 40) return toast(`${f.name} has too little text.`, true);
-        state.pending.push({ type: "file", label: f.name, content });
-        drawPending();
-      };
-      reader.readAsText(f);
+      if (ext === "pdf" || ext === "docx") {
+        // Binary: send to the server as base64 for extraction.
+        reader.onload = () => {
+          const b64 = String(reader.result || "").split(",")[1] || "";
+          if (!b64) return toast(`Couldn't read ${f.name}.`, true);
+          state.pending.push({ type: "file", label: f.name, filename: f.name, dataBase64: b64, size: f.size });
+          drawPending();
+        };
+        reader.readAsDataURL(f);
+      } else {
+        reader.onload = () => {
+          const content = String(reader.result || "").trim();
+          if (content.length < 40) return toast(`${f.name} has too little text.`, true);
+          state.pending.push({ type: "file", label: f.name, content });
+          drawPending();
+        };
+        reader.readAsText(f);
+      }
     });
   }
 
@@ -381,7 +466,10 @@ function drawPending() {
     const li = el("li", { className: "pending-item" });
     li.appendChild(el("span", { className: "ptype", textContent: p.type }));
     li.appendChild(el("span", { textContent: p.label.length > 60 ? p.label.slice(0, 60) + "…" : p.label }));
-    const meta = el("span", { className: "pmeta", textContent: p.content ? `${p.content.length.toLocaleString()} chars` : "URL" });
+    const metaText = p.content ? `${p.content.length.toLocaleString()} chars`
+      : p.dataBase64 ? `${Math.round((p.size || 0) / 1024).toLocaleString()} KB`
+      : "URL";
+    const meta = el("span", { className: "pmeta", textContent: metaText });
     li.appendChild(meta);
     const rm = el("button", { className: "premove", textContent: "×" });
     rm.addEventListener("click", () => { state.pending.splice(i, 1); drawPending(); });
@@ -660,33 +748,152 @@ function plainText(name, st, cfg) {
   return t;
 }
 
+// ---- Style-guide (fuller document) format ----------------------------------
+
+function identityProse(name, st) {
+  const who = name && name !== "This voice" ? name : "This voice";
+  let s = st.adjectives.length
+    ? `${who} sounds ${listJoin(st.adjectives.map((a) => a.toLowerCase()))} — and consistently so.`
+    : `${who} has a recognizable, consistent register.`;
+  const d = describe(st);
+  s += ` ${d.wit} ${d.formality}`;
+  return s;
+}
+
+function audienceProse(st) {
+  const d = describe(st);
+  const base = st.routes.length
+    ? `Most often this voice is writing for the people it meets in ${listJoin(st.routes.map((r) => r.toLowerCase()))}.`
+    : `This voice adapts to its reader rather than a single fixed audience.`;
+  return `${base} ${d.tech}`;
+}
+
+function structuralPatterns(st) {
+  const out = [];
+  out.push(st.pace >= 67 ? "Short, punchy sentences. Cut anything that doesn't earn its place."
+    : st.pace < 34 ? "Give ideas room — longer, developed sentences and full explanations are welcome."
+    : "Vary sentence length: expand where it helps the point land, tighten where it doesn't.");
+  out.push(st.formality >= 67 ? "Measured, structured paragraphs; avoid contractions and slang."
+    : st.formality < 34 ? "Write the way you talk — contractions, direct address, a conversational rhythm."
+    : "Professional but human; contractions are fine, stiffness isn't.");
+  out.push(st.tech >= 67 ? "Assume an informed reader; use precise terminology without over-explaining."
+    : st.tech < 34 ? "Translate or cut every technical term; lead with plain language."
+    : "Introduce technical terms only when the reader can handle them, and define them on first use.");
+  out.push(st.wit >= 67 ? "Let humor and sharp reframes do real work in the argument, not just decorate it."
+    : st.wit < 34 ? "Play it straight; let clarity carry the piece rather than cleverness."
+    : "Use wit sparingly — through framing and analogy more than jokes.");
+  return out;
+}
+
+function listJoin(arr) {
+  if (arr.length <= 1) return arr[0] || "";
+  if (arr.length === 2) return `${arr[0]} and ${arr[1]}`;
+  return `${arr.slice(0, -1).join(", ")}, and ${arr[arr.length - 1]}`;
+}
+
+function guideHtml(name, st, cfg) {
+  const muteMap = Object.fromEntries(cfg.MUTES.map((m) => [m.key, m.text]));
+  const soloMap = Object.fromEntries(cfg.SOLOS.map((s) => [s.key, s.text]));
+  let h = `<div class="card-eyebrow">Writing Style Guide</div><h2>${escapeHtml(name)}</h2>`;
+  if (st.adjectives.length) h += `<div class="thesis">${st.adjectives.map(escapeHtml).join(" · ")}</div>`;
+  h += `<h3>Core identity</h3><p>${escapeHtml(identityProse(name, st))}</p>`;
+  h += `<h3>Who you're writing for</h3><p>${escapeHtml(audienceProse(st))}</p>`;
+  if (st.mutes.length) {
+    h += `<h3>Non-negotiables — never do this</h3><ul>`;
+    st.mutes.forEach((k) => muteMap[k] && (h += `<li>${escapeHtml(muteMap[k])}</li>`));
+    h += `</ul>`;
+  }
+  if (st.solos.length) {
+    h += `<h3>What you're known for</h3><ul>`;
+    st.solos.forEach((k) => soloMap[k] && (h += `<li>${escapeHtml(soloMap[k])}</li>`));
+    h += `</ul>`;
+  }
+  if (st.routes.length) {
+    h += `<h3>Where this shows up</h3><ul>`;
+    st.routes.forEach((r) => h += `<li>${escapeHtml(r)}</li>`);
+    h += `</ul>`;
+  }
+  h += `<h3>Structural patterns</h3><ul>`;
+  structuralPatterns(st).forEach((p) => h += `<li>${escapeHtml(p)}</li>`);
+  h += `</ul>`;
+  return h;
+}
+
+function guideText(name, st, cfg) {
+  const muteMap = Object.fromEntries(cfg.MUTES.map((m) => [m.key, m.text]));
+  const soloMap = Object.fromEntries(cfg.SOLOS.map((s) => [s.key, s.text]));
+  let t = `# ${name} — Writing Style Guide\n\n`;
+  if (st.adjectives.length) t += `*${st.adjectives.join(" · ")}*\n\n`;
+  t += `## Core identity\n${identityProse(name, st)}\n\n`;
+  t += `## Who you're writing for\n${audienceProse(st)}\n\n`;
+  if (st.mutes.length) { t += `## Non-negotiables — never do this\n`; st.mutes.forEach((k) => muteMap[k] && (t += `- ${muteMap[k]}\n`)); t += `\n`; }
+  if (st.solos.length) { t += `## What you're known for\n`; st.solos.forEach((k) => soloMap[k] && (t += `- ${soloMap[k]}\n`)); t += `\n`; }
+  if (st.routes.length) { t += `## Where this shows up\n`; st.routes.forEach((r) => t += `- ${r}\n`); t += `\n`; }
+  t += `## Structural patterns\n`; structuralPatterns(st).forEach((p) => t += `- ${p}\n`);
+  t += `\n— Made with Voice Tuner by Gonemo · https://www.gonemo.ai\n`;
+  return t;
+}
+
+// ---- Unified output rendering (card | guide) -------------------------------
+
+function outputHtml(name, st, cfg, format) {
+  return format === "guide"
+    ? guideHtml(name, st, cfg)
+    : cardHtml(name, st, cfg, { date: "printed " + new Date().toLocaleDateString() });
+}
+
+function outputText(name, st, cfg, format) {
+  return format === "guide" ? guideText(name, st, cfg) : plainText(name, st, cfg);
+}
+
+function formatToggle(current, onChange) {
+  const wrap = el("div", { className: "fmt-toggle" });
+  [["card", "Voice Card"], ["guide", "Style guide"]].forEach(([val, label]) => {
+    const b = el("button", { className: "fmt-opt" + (val === current ? " active" : ""), textContent: label });
+    b.addEventListener("click", () => onChange(val));
+    wrap.appendChild(b);
+  });
+  return wrap;
+}
+
+let cardFormat = "card";
+
 function buildCard() {
   const s = activeStyle();
   const name = s.name.trim() || "This voice";
   const card = document.getElementById("card");
-  let html = cardHtml(name, s.state, state.config, { date: "printed " + new Date().toLocaleDateString() });
-  html += `<div class="card-actions">
-    <button id="copyBtn">Copy as text</button>
-    <button id="downloadBtn" class="secondary">Download .md</button>
-    <button id="shareCardBtn" class="secondary">${s.shareId ? "Copy share link" : "Share"}</button>
-    <span class="status" id="cardStatus"></span></div>`;
-  html += `<div class="card-gonemo"><span>Made with <strong>Voice Tuner</strong> by Gonemo</span><a href="https://www.gonemo.ai" target="_blank" rel="noopener">www.gonemo.ai →</a></div>`;
-  card.innerHTML = html;
+
+  function render() {
+    let html = `<div class="fmt-toggle-slot"></div>`;
+    html += outputHtml(name, s.state, state.config, cardFormat);
+    html += `<div class="card-actions">
+      <button id="copyBtn">Copy as text</button>
+      <button id="downloadBtn" class="secondary">Download .md</button>
+      <button id="shareCardBtn" class="secondary">${s.shareId ? "Copy share link" : "Share"}</button>
+      <span class="status" id="cardStatus"></span></div>`;
+    html += `<div class="card-gonemo"><span>Made with <strong>Voice Tuner</strong> by Gonemo</span><a href="https://www.gonemo.ai" target="_blank" rel="noopener">www.gonemo.ai →</a></div>`;
+    card.innerHTML = html;
+    card.querySelector(".fmt-toggle-slot").appendChild(
+      formatToggle(cardFormat, (f) => { cardFormat = f; render(); }));
+
+    const text = outputText(name, s.state, state.config, cardFormat);
+    const suffix = cardFormat === "guide" ? "style-guide" : "voice-card";
+    document.getElementById("copyBtn").addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(text); setCardStatus("Copied."); }
+      catch { setCardStatus("Couldn't copy — select manually."); }
+    });
+    document.getElementById("downloadBtn").addEventListener("click", () => {
+      const blob = new Blob([text], { type: "text/markdown" });
+      const url = URL.createObjectURL(blob);
+      const a = el("a", { href: url, download: `${name.replace(/\s+/g, "-").toLowerCase()}-${suffix}.md` });
+      a.click(); URL.revokeObjectURL(url);
+    });
+    document.getElementById("shareCardBtn").addEventListener("click", toggleShare);
+  }
+
+  render();
   card.classList.add("show");
   card.scrollIntoView({ behavior: "smooth", block: "nearest" });
-
-  const text = plainText(name, s.state, state.config);
-  document.getElementById("copyBtn").addEventListener("click", async () => {
-    try { await navigator.clipboard.writeText(text); setCardStatus("Copied."); }
-    catch { setCardStatus("Couldn't copy — select manually."); }
-  });
-  document.getElementById("downloadBtn").addEventListener("click", () => {
-    const blob = new Blob([text], { type: "text/markdown" });
-    const url = URL.createObjectURL(blob);
-    const a = el("a", { href: url, download: `${name.replace(/\s+/g, "-").toLowerCase()}-voice-card.md` });
-    a.click(); URL.revokeObjectURL(url);
-  });
-  document.getElementById("shareCardBtn").addEventListener("click", toggleShare);
 }
 
 function setCardStatus(msg) {
@@ -728,8 +935,14 @@ async function renderShare(shareId) {
     const st = data.style.state;
     root.innerHTML = `<a class="share-back" href="/">← Voice Tuner</a>`;
     const card = el("div", { className: "card static" });
-    card.innerHTML = cardHtml(data.style.name, st, cfg, { date: "shared" }) +
-      `<div class="card-gonemo"><span>Made with <strong>Voice Tuner</strong> by Gonemo — build your own voice card free.</span><a href="https://www.gonemo.ai" target="_blank" rel="noopener">www.gonemo.ai →</a></div>`;
+    let fmt = "card";
+    const gonemo = `<div class="card-gonemo"><span>Made with <strong>Voice Tuner</strong> by Gonemo — build your own voice free.</span><a href="https://www.gonemo.ai" target="_blank" rel="noopener">www.gonemo.ai →</a></div>`;
+    function draw() {
+      const body = fmt === "guide" ? guideHtml(data.style.name, st, cfg) : cardHtml(data.style.name, st, cfg, { date: "shared" });
+      card.innerHTML = `<div class="fmt-toggle-slot"></div>` + body + gonemo;
+      card.querySelector(".fmt-toggle-slot").appendChild(formatToggle(fmt, (f) => { fmt = f; draw(); }));
+    }
+    draw();
     root.appendChild(card);
   } catch {
     root.innerHTML = `<a class="share-back" href="/">← Voice Tuner</a><div class="card static"><h2>Not found</h2><p>This shared voice card isn't available — the link may have been turned off.</p></div>`;

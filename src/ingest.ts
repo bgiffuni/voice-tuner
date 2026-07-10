@@ -3,10 +3,13 @@
 // cleaning up pasted/uploaded text. (Uploaded files are read as text on the
 // client and arrive here as strings.)
 import crypto from "node:crypto";
+import mammoth from "mammoth";
+import { PDFParse } from "pdf-parse";
 import type { Source } from "./types.ts";
 
 const FETCH_TIMEOUT_MS = 15000;
 const MAX_HTML_BYTES = 1_500_000;
+const MAX_FILE_BYTES = 8_000_000; // decoded upload cap
 const MAX_SAMPLE_CHARS = 20_000; // per source, keeps prompts bounded
 const UA = "Mozilla/5.0 (compatible; VoiceTuner/1.0; +writing-sample-capture)";
 
@@ -66,6 +69,36 @@ async function fetchUrl(url: string): Promise<string | null> {
   }
 }
 
+/** Extract text from an uploaded file buffer by extension. Returns "" on failure. */
+async function extractFileText(filename: string, buf: Buffer): Promise<string> {
+  const ext = filename.toLowerCase().split(".").pop() || "";
+  try {
+    if (ext === "pdf") {
+      const parser = new PDFParse({ data: new Uint8Array(buf) });
+      try {
+        const result = await parser.getText();
+        // pdf-parse v2 inserts "-- N of M --" page separators; strip them.
+        return (result.text || "").replace(/\s*--\s*\d+\s+of\s+\d+\s*--\s*/g, " ").trim();
+      } finally {
+        await parser.destroy();
+      }
+    }
+    if (ext === "docx") {
+      const { value } = await mammoth.extractRawText({ buffer: buf });
+      return (value || "").trim();
+    }
+    if (ext === "doc") {
+      // Legacy .doc (binary) isn't supported by mammoth; ask for .docx/PDF/paste.
+      return "";
+    }
+    // html/htm → strip tags; everything else treated as plain text.
+    const text = buf.toString("utf8");
+    return ext === "html" || ext === "htm" ? extractText(text) : text.trim();
+  } catch {
+    return "";
+  }
+}
+
 function clip(text: string): string {
   return text.length > MAX_SAMPLE_CHARS ? text.slice(0, MAX_SAMPLE_CHARS) : text;
 }
@@ -83,8 +116,10 @@ export interface IngestedSample {
 export interface RawSample {
   type: "text" | "url" | "file";
   label?: string;
-  content?: string; // for text / file
+  content?: string; // for text / file (already-extracted text)
   url?: string; // for url
+  dataBase64?: string; // for binary file uploads (pdf/docx) — decoded server-side
+  filename?: string; // original filename, used to pick a parser
 }
 
 /**
@@ -102,8 +137,14 @@ export async function ingestSample(raw: RawSample): Promise<IngestedSample | nul
     if (!html) return null;
     text = extractText(html);
     label = label || url;
+  } else if (raw.type === "file" && raw.dataBase64) {
+    // Binary upload (pdf/docx): decode + extract server-side.
+    const buf = Buffer.from(raw.dataBase64, "base64");
+    if (buf.length === 0 || buf.length > MAX_FILE_BYTES) return null;
+    text = await extractFileText(raw.filename || label || "upload", buf);
+    label = label || raw.filename || "Uploaded file";
   } else {
-    // text or file: client already gave us the text
+    // text or already-extracted file text from the client
     text = (raw.content || "").trim();
     label = label || (raw.type === "file" ? "Uploaded file" : "Pasted text");
   }
