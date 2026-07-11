@@ -313,12 +313,23 @@ function renderConsole() {
   const st = s.state;
   const console_ = el("div", { className: "console" });
 
-  // Head: editable name + save status
+  // Plain-language explainer for first-timers (dismissible).
+  console_.appendChild(renderIntro());
+
+  // Head: recording "screen" + editable name + save status
   const head = el("div", { className: "console-head" });
+  head.appendChild(renderScreen(s.name));
+  const nameRow = el("div", { className: "name-row" });
+  const nameField = el("div", { className: "name-field" });
+  nameField.appendChild(el("label", { textContent: "Style name" }));
   const nameInput = el("input", { className: "style-name-input", value: s.name, type: "text" });
-  nameInput.addEventListener("input", () => { s.name = nameInput.value; renderStyleBarNames(); scheduleSave(); });
-  head.appendChild(nameInput);
-  head.appendChild(el("span", { className: "save-status", id: "saveStatus", textContent: "Saved" }));
+  nameInput.addEventListener("input", () => {
+    s.name = nameInput.value; renderStyleBarNames(); updateScreenTitle(nameInput.value); scheduleSave();
+  });
+  nameField.appendChild(nameInput);
+  nameRow.appendChild(nameField);
+  nameRow.appendChild(el("span", { className: "save-status", id: "saveStatus", textContent: "Saved" }));
+  head.appendChild(nameRow);
   console_.appendChild(head);
 
   console_.appendChild(renderIngest());
@@ -342,6 +353,46 @@ function renderConsole() {
   return console_;
 }
 
+// The console's "screen": the style name on a spinning record, mid-recording.
+function renderScreen(name) {
+  const screen = el("div", { className: "rec-screen" });
+  screen.innerHTML = `
+    <div class="rec-disc"><div class="rec-grooves"></div><div class="rec-spindle"></div></div>
+    <div class="rec-readout">
+      <div class="rec-meta"><span class="rec-dot"></span><span>REC · TONE OF VOICE</span></div>
+      <div class="rec-title" id="recTitle"></div>
+      <div class="rec-sub">now laying down the master</div>
+      <div class="rec-vu">${"<span></span>".repeat(9)}</div>
+    </div>`;
+  screen.querySelector("#recTitle").textContent = name || "Untitled voice";
+  return screen;
+}
+
+function updateScreenTitle(name) {
+  const t = document.getElementById("recTitle");
+  if (t) t.textContent = name || "Untitled voice";
+}
+
+// Dismissible plain-language intro — what a tone of voice is and the 3 steps.
+function renderIntro() {
+  const wrap = el("div", { className: "intro-card" });
+  if (localStorage.getItem("vt_intro_dismissed")) wrap.classList.add("hidden");
+  wrap.innerHTML = `
+    <button class="intro-close" type="button" aria-label="Dismiss">×</button>
+    <div class="intro-title">New here? Tone of voice, in 20 seconds.</div>
+    <p class="intro-lead">Your <strong>tone of voice</strong> is simply how your brand sounds when it writes — friendly or formal, playful or serious, chatty or precise. Pin it down once and every email, post and page (and every AI tool you use) can sound like <em>you</em>.</p>
+    <div class="intro-steps">
+      <div class="intro-step"><span class="istep-n">1</span><div><strong>Feed it a sample.</strong> Paste something you've already written and we'll set the dials for you. No sample? Just set them yourself.</div></div>
+      <div class="intro-step"><span class="istep-n">2</span><div><strong>Adjust the board.</strong> Slide the dials and flip the switches until it sounds right. Unsure? The middle is a safe default.</div></div>
+      <div class="intro-step"><span class="istep-n">3</span><div><strong>Print or share.</strong> Out comes a one-page guide your team — and your tools — can follow.</div></div>
+    </div>`;
+  wrap.querySelector(".intro-close").addEventListener("click", () => {
+    wrap.classList.add("hidden");
+    localStorage.setItem("vt_intro_dismissed", "1");
+  });
+  return wrap;
+}
+
 function renderStyleBarNames() {
   const bar = document.querySelector(".style-bar");
   if (!bar) return;
@@ -357,8 +408,8 @@ function renderStyleBarNames() {
 function renderIngest() {
   let tab = "paste";
   const mod = el("section", { className: "module" });
-  mod.innerHTML = `<div class="module-label">Auto-tune — learn from your writing</div>
-    <div class="module-hint">Paste text, upload files, or add URLs of things you've written. ${state.config.mode === "live" ? "Claude" : "The offline analyzer"} sets the console from them.</div>`;
+  mod.innerHTML = `<div class="module-label">Step 1 · Learn from your writing</div>
+    <div class="module-hint">Paste a few things you've already written (or upload files / add links) and ${state.config.mode === "live" ? "Claude" : "the offline analyzer"} sets every dial below for you. No sample handy? Skip this and set them yourself.</div>`;
   const box = el("div", { className: "ingest" });
 
   const tabs = el("div", { className: "ingest-tabs" });
@@ -647,8 +698,8 @@ function tagInput(values, suggestions, max, onChange) {
 function renderPersona() {
   const mod = el("section", { className: "module", dataset: { mod: "persona" } });
   const p = activeStyle().state.persona;
-  mod.innerHTML = `<div class="module-label">Master — brand persona</div>
-    <div class="module-hint">Who this voice is, and who it's for. The heart of the guide.</div>`;
+  mod.innerHTML = `<div class="module-label">Step 2 · Who you are</div>
+    <div class="module-hint">Say who your brand is and who it's for, in plain words. This one line anchors everything else.</div>`;
   const grid = el("div", { className: "persona-grid" });
 
   const archField = el("div", { className: "persona-field" });
@@ -708,8 +759,8 @@ function updateMeter(fader, pct) {
 
 function renderDimensions() {
   const mod = el("section", { className: "module", dataset: { mod: "dimensions" } });
-  mod.innerHTML = `<div class="module-label">The 4 dimensions of tone</div>
-    <div class="module-hint">Push each fader to where this brand actually sits — they snap to named settings.</div>`;
+  mod.innerHTML = `<div class="module-label">Step 3 · How you sound</div>
+    <div class="module-hint">Slide each fader toward the word that fits your brand. Not sure? Leave it near the middle.</div>`;
   const bank = el("div", { className: "fader-bank" });
   const st = activeStyle().state;
   state.config.DIMENSIONS.forEach((f) => {
@@ -761,8 +812,8 @@ function renderDimensions() {
 function renderMatrix() {
   const mod = el("section", { className: "module", dataset: { mod: "matrix" } });
   const st = activeStyle().state;
-  mod.innerHTML = `<div class="module-label">Tone of voice matrix</div>
-    <div class="module-hint">For each defining trait: what it means, where to draw the line, and a do/don't example.</div>`;
+  mod.innerHTML = `<div class="module-label">Step 4 · Your do's and don'ts</div>
+    <div class="module-hint">Pick a few words that describe you. For each, jot what it means — plus a quick example of what to write and what to avoid. Optional, but it makes the guide much clearer.</div>`;
 
   const scroll = el("div", { className: "matrix-scroll" });
   const table = el("div", { className: "matrix-table" });
@@ -820,7 +871,8 @@ function matrixRow(row, i) {
 function renderVocab() {
   const mod = el("section", { className: "module", dataset: { mod: "vocab" } });
   const v = activeStyle().state.vocab;
-  mod.innerHTML = `<div class="module-label">Vocabulary & style rules</div>`;
+  mod.innerHTML = `<div class="module-label">Step 5 · Words &amp; style rules</div>
+    <div class="module-hint">Words your brand loves or bans, plus a few writing rules — flip the switches to taste.</div>`;
 
   const grid = el("div", { className: "vocab-grid" });
   const love = el("div", { className: "vocab-field" });
@@ -834,29 +886,56 @@ function renderVocab() {
   grid.appendChild(avoid);
   mod.appendChild(grid);
 
-  const rules = el("div", { className: "grammar-grid" });
+  // Style rules as a bank of physical board switches.
   const g = state.config.GRAMMAR;
-  rules.appendChild(segmented("Contractions", g.contractions, v.contractions, (x) => { activeStyle().state.vocab.contractions = x; scheduleSave(); }));
-  rules.appendChild(segmented("Emojis", g.emojis, v.emojis, (x) => { activeStyle().state.vocab.emojis = x; scheduleSave(); }));
-  rules.appendChild(segmented("Exclamation marks", g.exclamations, v.exclamations, (x) => { activeStyle().state.vocab.exclamations = x; scheduleSave(); }));
-  rules.appendChild(segmented("Casing", g.casing, v.casing, (x) => { activeStyle().state.vocab.casing = x; scheduleSave(); }));
-  mod.appendChild(rules);
+  const bank = el("div", { className: "switch-bank" });
+  const bankHead = el("div", { className: "switch-bank-head" });
+  bankHead.appendChild(el("span", { textContent: "STYLE RULES" }));
+  bankHead.appendChild(el("span", { className: "switch-bank-screw" }));
+  bank.appendChild(bankHead);
+  const row = el("div", { className: "switch-row" });
+  row.appendChild(boardSwitch("Contractions", g.contractions, v.contractions, "don't vs. do not", (x) => { activeStyle().state.vocab.contractions = x; scheduleSave(); }));
+  row.appendChild(boardSwitch("Emojis", g.emojis, v.emojis, "how often 🎛", (x) => { activeStyle().state.vocab.emojis = x; scheduleSave(); }));
+  row.appendChild(boardSwitch("Exclamation marks", g.exclamations, v.exclamations, "energy!", (x) => { activeStyle().state.vocab.exclamations = x; scheduleSave(); }));
+  row.appendChild(boardSwitch("Casing", g.casing, v.casing, "Standard vs. loose", (x) => { activeStyle().state.vocab.casing = x; scheduleSave(); }));
+  bank.appendChild(row);
+  mod.appendChild(bank);
   return mod;
 }
 
-function segmented(label, options, current, onChange) {
-  const wrap = el("div", { className: "seg-field" });
-  wrap.appendChild(el("div", { className: "seg-label", textContent: label }));
-  const group = el("div", { className: "seg-group" });
-  options.forEach((o) => {
-    const b = el("button", { className: "seg-opt" + (o === current ? " active" : ""), textContent: o, type: "button" });
-    b.addEventListener("click", () => {
-      onChange(o);
-      group.querySelectorAll(".seg-opt").forEach((x) => x.classList.toggle("active", x === b));
-    });
-    group.appendChild(b);
+// A physical-looking slide switch with 2–3 named positions.
+function boardSwitch(label, options, current, help, onChange) {
+  const wrap = el("div", { className: "switch-field" });
+  wrap.appendChild(el("div", { className: "switch-label", textContent: label }));
+  const track = el("div", { className: "switch-track" });
+  const knob = el("div", { className: "switch-knob" });
+  knob.style.setProperty("--n", options.length);
+  track.appendChild(knob);
+  wrap.appendChild(track);
+  const scale = el("div", { className: "switch-scale" });
+
+  function setPos(idx, fire) {
+    knob.style.setProperty("--pos", idx);
+    track.classList.toggle("lit", idx > 0);
+    scale.querySelectorAll("span").forEach((s, i) => s.classList.toggle("active", i === idx));
+    if (fire) onChange(options[idx]);
+  }
+  options.forEach((o, i) => {
+    const s = el("span", { textContent: o });
+    s.addEventListener("click", () => setPos(i, true));
+    scale.appendChild(s);
   });
-  wrap.appendChild(group);
+  wrap.appendChild(scale);
+  if (help) wrap.appendChild(el("div", { className: "switch-help", textContent: help }));
+
+  // Clicking the switch body advances to the next position (feels like a flick).
+  track.addEventListener("click", () => {
+    const cur = scale.querySelector("span.active");
+    const curIdx = cur ? [...scale.children].indexOf(cur) : 0;
+    setPos((curIdx + 1) % options.length, true);
+  });
+
+  setPos(Math.max(0, options.indexOf(current)), false);
   return wrap;
 }
 
