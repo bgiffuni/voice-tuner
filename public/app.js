@@ -316,27 +316,14 @@ function renderConsole() {
   // Plain-language explainer for first-timers (dismissible).
   console_.appendChild(renderIntro());
 
-  // Head: recording "screen" + editable name + save status
-  const head = el("div", { className: "console-head" });
-  head.appendChild(renderScreen(s.name));
-  const nameRow = el("div", { className: "name-row" });
-  const nameField = el("div", { className: "name-field" });
-  nameField.appendChild(el("label", { textContent: "Style name" }));
-  const nameInput = el("input", { className: "style-name-input", value: s.name, type: "text" });
-  nameInput.addEventListener("input", () => {
-    s.name = nameInput.value; renderStyleBarNames(); updateScreenTitle(nameInput.value); scheduleSave();
-  });
-  nameField.appendChild(nameInput);
-  nameRow.appendChild(nameField);
-  nameRow.appendChild(el("span", { className: "save-status", id: "saveStatus", textContent: "Saved" }));
-  head.appendChild(nameRow);
-  console_.appendChild(head);
+  // The board — one physical unit: screen + name, levels (faders), switches.
+  console_.appendChild(renderBoard());
 
+  // Configuration around the board.
   console_.appendChild(renderIngest());
   console_.appendChild(renderPersona());
-  console_.appendChild(renderDimensions());
   console_.appendChild(renderMatrix());
-  console_.appendChild(renderVocab());
+  console_.appendChild(renderWords());
 
   // Engage row
   const engage = el("div", { className: "engage-wrap" });
@@ -391,6 +378,87 @@ function renderIntro() {
     localStorage.setItem("vt_intro_dismissed", "1");
   });
   return wrap;
+}
+
+// The board — the console's single physical unit. One chassis holds the LED
+// screen, the editable name, the level faders and the style-rule switches.
+function renderBoard() {
+  const s = activeStyle();
+  const board = el("section", { className: "board" });
+
+  const brand = el("div", { className: "board-brand" });
+  brand.innerHTML = `<span class="board-screw"></span><span>VOICE BOARD · GONEMO</span><span class="board-screw"></span>`;
+  board.appendChild(brand);
+
+  const face = el("div", { className: "board-face" });
+  face.appendChild(renderScreen(s.name));
+  const nameRow = el("div", { className: "name-row" });
+  const nameField = el("div", { className: "name-field" });
+  nameField.appendChild(el("label", { textContent: "Style name" }));
+  const nameInput = el("input", { className: "style-name-input", value: s.name, type: "text" });
+  nameInput.addEventListener("input", () => {
+    s.name = nameInput.value; renderStyleBarNames(); updateScreenTitle(nameInput.value); scheduleSave();
+  });
+  nameField.appendChild(nameInput);
+  nameRow.appendChild(nameField);
+  nameRow.appendChild(el("span", { className: "save-status", id: "saveStatus", textContent: "Saved" }));
+  face.appendChild(nameRow);
+  board.appendChild(face);
+
+  board.appendChild(renderLevels());
+  board.appendChild(renderSwitchBank());
+  return board;
+}
+
+// Level faders (the four tone dimensions) — a recessed well on the board.
+function renderLevels() {
+  const well = el("div", { className: "board-well" });
+  well.appendChild(el("div", { className: "well-label", textContent: "Levels — how you sound" }));
+  well.appendChild(el("div", { className: "well-hint", textContent: "Slide each fader toward the word that fits your brand. Not sure? Leave it near the middle." }));
+  const bank = el("div", { className: "fader-bank" });
+  const st = activeStyle().state;
+  state.config.DIMENSIONS.forEach((f) => {
+    const options = f.options;
+    const maxIdx = options.length - 1;
+    const curIdx = dimIndex(f.key, st.dimensions[f.key]);
+    const wrap = el("div", { className: "fader" });
+    wrap.style.setProperty("--accent", DIM_ACCENTS[f.key] || "#38BDF8");
+
+    const scribble = el("div", { className: "scribble" });
+    scribble.innerHTML = f.label.replace("\n", "<br>");
+    wrap.appendChild(scribble);
+
+    const body = el("div", { className: "fader-body" });
+    const trackWrap = el("div", { className: "fader-track-wrap" });
+    const ticks = el("div", { className: "fader-ticks" });
+    for (let i = 0; i < options.length; i++) ticks.appendChild(el("span", { className: "tick" }));
+    trackWrap.appendChild(ticks);
+    const input = el("input", { type: "range", min: 0, max: maxIdx, step: 1, value: curIdx, className: "vslider" });
+    input.dataset.key = f.key;
+    trackWrap.appendChild(input);
+    body.appendChild(trackWrap);
+    body.appendChild(buildMeter());
+    wrap.appendChild(body);
+
+    const valEl = el("div", { className: "fader-value", textContent: options[curIdx] });
+    input.addEventListener("input", () => {
+      const idx = Number(input.value);
+      activeStyle().state.dimensions[f.key] = options[idx];
+      valEl.textContent = options[idx];
+      updateMeter(wrap, maxIdx ? (idx / maxIdx) * 100 : 0);
+      scheduleSave();
+    });
+    wrap.appendChild(valEl);
+
+    const bottom = el("div", { className: "fader-bottom-label" });
+    bottom.innerHTML = escapeHtml(f.lowHint) + " &nbsp;—&nbsp; " + escapeHtml(f.highHint);
+    wrap.appendChild(bottom);
+
+    bank.appendChild(wrap);
+    updateMeter(wrap, maxIdx ? (curIdx / maxIdx) * 100 : 0);
+  });
+  well.appendChild(bank);
+  return well;
 }
 
 function renderStyleBarNames() {
@@ -578,7 +646,8 @@ function applyAnalysis(a) {
   // settings so the change reads on the console.
   refreshModule("persona", renderPersona);
   refreshModule("matrix", renderMatrix);
-  refreshModule("vocab", renderVocab);
+  refreshModule("words", renderWords);
+  refreshModule("switches", renderSwitchBank);
   state.config.DIMENSIONS.forEach((d) => animateDimension(d.key, dimIndex(d.key, st.dimensions[d.key])));
   updateEngageNote();
 }
@@ -757,62 +826,12 @@ function updateMeter(fader, pct) {
   segs.forEach((s, i) => s.classList.toggle("on", segs.length - 1 - i < lit));
 }
 
-function renderDimensions() {
-  const mod = el("section", { className: "module", dataset: { mod: "dimensions" } });
-  mod.innerHTML = `<div class="module-label">Step 3 · How you sound</div>
-    <div class="module-hint">Slide each fader toward the word that fits your brand. Not sure? Leave it near the middle.</div>`;
-  const bank = el("div", { className: "fader-bank" });
-  const st = activeStyle().state;
-  state.config.DIMENSIONS.forEach((f) => {
-    const options = f.options;
-    const maxIdx = options.length - 1;
-    const curIdx = dimIndex(f.key, st.dimensions[f.key]);
-    const wrap = el("div", { className: "fader" });
-    wrap.style.setProperty("--accent", DIM_ACCENTS[f.key] || "#38BDF8");
-
-    const scribble = el("div", { className: "scribble" });
-    scribble.innerHTML = f.label.replace("\n", "<br>");
-    wrap.appendChild(scribble);
-
-    const body = el("div", { className: "fader-body" });
-    const trackWrap = el("div", { className: "fader-track-wrap" });
-    const ticks = el("div", { className: "fader-ticks" });
-    for (let i = 0; i < options.length; i++) ticks.appendChild(el("span", { className: "tick" }));
-    trackWrap.appendChild(ticks);
-    const input = el("input", { type: "range", min: 0, max: maxIdx, step: 1, value: curIdx, className: "vslider" });
-    input.dataset.key = f.key;
-    trackWrap.appendChild(input);
-    body.appendChild(trackWrap);
-    body.appendChild(buildMeter());
-    wrap.appendChild(body);
-
-    const valEl = el("div", { className: "fader-value", textContent: options[curIdx] });
-    input.addEventListener("input", () => {
-      const idx = Number(input.value);
-      activeStyle().state.dimensions[f.key] = options[idx];
-      valEl.textContent = options[idx];
-      updateMeter(wrap, maxIdx ? (idx / maxIdx) * 100 : 0);
-      scheduleSave();
-    });
-    wrap.appendChild(valEl);
-
-    const bottom = el("div", { className: "fader-bottom-label" });
-    bottom.innerHTML = escapeHtml(f.lowHint) + " &nbsp;—&nbsp; " + escapeHtml(f.highHint);
-    wrap.appendChild(bottom);
-
-    bank.appendChild(wrap);
-    updateMeter(wrap, maxIdx ? (curIdx / maxIdx) * 100 : 0);
-  });
-  mod.appendChild(bank);
-  return mod;
-}
-
-// ---- 3. Tone of voice matrix -----------------------------------------------
+// ---- Tone of voice matrix --------------------------------------------------
 
 function renderMatrix() {
   const mod = el("section", { className: "module", dataset: { mod: "matrix" } });
   const st = activeStyle().state;
-  mod.innerHTML = `<div class="module-label">Step 4 · Your do's and don'ts</div>
+  mod.innerHTML = `<div class="module-label">Step 3 · Your do's and don'ts</div>
     <div class="module-hint">Pick a few words that describe you. For each, jot what it means — plus a quick example of what to write and what to avoid. Optional, but it makes the guide much clearer.</div>`;
 
   const scroll = el("div", { className: "matrix-scroll" });
@@ -866,14 +885,29 @@ function matrixRow(row, i) {
   return rowEl;
 }
 
-// ---- 4. Vocabulary & style rules -------------------------------------------
+// ---- Style-rule switches (on the board) ------------------------------------
 
-function renderVocab() {
-  const mod = el("section", { className: "module", dataset: { mod: "vocab" } });
+function renderSwitchBank() {
   const v = activeStyle().state.vocab;
-  mod.innerHTML = `<div class="module-label">Step 5 · Words &amp; style rules</div>
-    <div class="module-hint">Words your brand loves or bans, plus a few writing rules — flip the switches to taste.</div>`;
+  const g = state.config.GRAMMAR;
+  const well = el("div", { className: "board-well switches", dataset: { mod: "switches" } });
+  well.appendChild(el("div", { className: "well-label", textContent: "Style rules — flip to taste" }));
+  const row = el("div", { className: "switch-row" });
+  row.appendChild(boardSwitch("Contractions", g.contractions, v.contractions, "don't vs. do not", (x) => { activeStyle().state.vocab.contractions = x; scheduleSave(); }));
+  row.appendChild(boardSwitch("Emojis", g.emojis, v.emojis, "how often", (x) => { activeStyle().state.vocab.emojis = x; scheduleSave(); }));
+  row.appendChild(boardSwitch("Exclamation marks", g.exclamations, v.exclamations, "energy", (x) => { activeStyle().state.vocab.exclamations = x; scheduleSave(); }));
+  row.appendChild(boardSwitch("Casing", g.casing, v.casing, "Standard vs. loose", (x) => { activeStyle().state.vocab.casing = x; scheduleSave(); }));
+  well.appendChild(row);
+  return well;
+}
 
+// ---- Words we love / avoid (a step module) ---------------------------------
+
+function renderWords() {
+  const mod = el("section", { className: "module", dataset: { mod: "words" } });
+  const v = activeStyle().state.vocab;
+  mod.innerHTML = `<div class="module-label">Step 4 · Words you love &amp; avoid</div>
+    <div class="module-hint">Words and phrases your brand reaches for — and ones to keep out.</div>`;
   const grid = el("div", { className: "vocab-grid" });
   const love = el("div", { className: "vocab-field" });
   love.appendChild(el("div", { className: "vocab-head love", textContent: "Words we love" }));
@@ -885,21 +919,6 @@ function renderVocab() {
   avoid.appendChild(tagInput(v.avoid, [], 6, (x) => { activeStyle().state.vocab.avoid = x; scheduleSave(); }));
   grid.appendChild(avoid);
   mod.appendChild(grid);
-
-  // Style rules as a bank of physical board switches.
-  const g = state.config.GRAMMAR;
-  const bank = el("div", { className: "switch-bank" });
-  const bankHead = el("div", { className: "switch-bank-head" });
-  bankHead.appendChild(el("span", { textContent: "STYLE RULES" }));
-  bankHead.appendChild(el("span", { className: "switch-bank-screw" }));
-  bank.appendChild(bankHead);
-  const row = el("div", { className: "switch-row" });
-  row.appendChild(boardSwitch("Contractions", g.contractions, v.contractions, "don't vs. do not", (x) => { activeStyle().state.vocab.contractions = x; scheduleSave(); }));
-  row.appendChild(boardSwitch("Emojis", g.emojis, v.emojis, "how often 🎛", (x) => { activeStyle().state.vocab.emojis = x; scheduleSave(); }));
-  row.appendChild(boardSwitch("Exclamation marks", g.exclamations, v.exclamations, "energy!", (x) => { activeStyle().state.vocab.exclamations = x; scheduleSave(); }));
-  row.appendChild(boardSwitch("Casing", g.casing, v.casing, "Standard vs. loose", (x) => { activeStyle().state.vocab.casing = x; scheduleSave(); }));
-  bank.appendChild(row);
-  mod.appendChild(bank);
   return mod;
 }
 
