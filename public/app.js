@@ -316,14 +316,12 @@ function renderConsole() {
   // Plain-language explainer for first-timers (dismissible).
   console_.appendChild(renderIntro());
 
-  // The board — one physical unit: screen + name, levels (faders), switches.
-  console_.appendChild(renderBoard());
-
-  // Configuration around the board.
-  console_.appendChild(renderIngest());
-  console_.appendChild(renderPersona());
-  console_.appendChild(renderMatrix());
-  console_.appendChild(renderWords());
+  // Guided, top-to-bottom: learn → who you are → the board → do's/don'ts → words.
+  console_.appendChild(renderIngest());   // Step 1
+  console_.appendChild(renderPersona());  // Step 2
+  console_.appendChild(renderBoard());    // Step 3 — the board (screen + levels + switches)
+  console_.appendChild(renderMatrix());   // Step 4
+  console_.appendChild(renderWords());    // Step 5
 
   // Engage row
   const engage = el("div", { className: "engage-wrap" });
@@ -384,6 +382,9 @@ function renderIntro() {
 // screen, the editable name, the level faders and the style-rule switches.
 function renderBoard() {
   const s = activeStyle();
+  const mod = el("section", { className: "module" });
+  mod.innerHTML = `<div class="module-label">Step 3 · How you sound</div>
+    <div class="module-hint">This is your board. Slide the faders and flip the switches until it sounds like you — or paste a sample in Step 1 and we'll set it for you.</div>`;
   const board = el("section", { className: "board" });
 
   const brand = el("div", { className: "board-brand" });
@@ -407,7 +408,8 @@ function renderBoard() {
 
   board.appendChild(renderLevels());
   board.appendChild(renderSwitchBank());
-  return board;
+  mod.appendChild(board);
+  return mod;
 }
 
 // Level faders (the four tone dimensions) — a recessed well on the board.
@@ -831,7 +833,7 @@ function updateMeter(fader, pct) {
 function renderMatrix() {
   const mod = el("section", { className: "module", dataset: { mod: "matrix" } });
   const st = activeStyle().state;
-  mod.innerHTML = `<div class="module-label">Step 3 · Your do's and don'ts</div>
+  mod.innerHTML = `<div class="module-label">Step 4 · Your do's and don'ts</div>
     <div class="module-hint">Pick a few words that describe you. For each, jot what it means — plus a quick example of what to write and what to avoid. Optional, but it makes the guide much clearer.</div>`;
 
   const scroll = el("div", { className: "matrix-scroll" });
@@ -906,7 +908,7 @@ function renderSwitchBank() {
 function renderWords() {
   const mod = el("section", { className: "module", dataset: { mod: "words" } });
   const v = activeStyle().state.vocab;
-  mod.innerHTML = `<div class="module-label">Step 4 · Words you love &amp; avoid</div>
+  mod.innerHTML = `<div class="module-label">Step 5 · Words you love &amp; avoid</div>
     <div class="module-hint">Words and phrases your brand reaches for — and ones to keep out.</div>`;
   const grid = el("div", { className: "vocab-grid" });
   const love = el("div", { className: "vocab-field" });
